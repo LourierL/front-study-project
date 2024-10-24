@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.bootcdn.net/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <title>QQ邮箱登录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .login-container {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 400px;
+            padding: 20px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .login-tabs {
+            display: flex;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .tab.active {
+            color: #12b7f5;
+            border-bottom: 2px solid #12b7f5;
+        }
+
+        .login-content > div {
+            display: none;
+        }
+
+        .login-content > div.active {
+            display: block;
+        }
+
+        /* 快捷登录（二维码）样式 */
+        .qrcode-container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .qrcode-box {
+            width: 180px;
+            height: 180px;
+            margin: 0 auto;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 密码登录表单样式 */
+        .login-form {
+            padding: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background-color: #12b7f5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .login-button:hover {
+            background-color: #0ea2e4;
+        }
+
+        .login-footer {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .login-footer a {
+            color: #12b7f5;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .login-footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h2>QQ邮箱登录</h2>
+        </div>
+        
+        <div class="login-tabs">
+            <div class="tab active" onclick="switchTab('qrcode')">快捷登录</div>
+            <div class="tab" onclick="switchTab('password')">密码登录</div>
+        </div>
+
+        <div class="login-content">
+            <!-- 快捷登录（二维码）部分 -->
+            <div id="qrcode-login" class="active">
+                <div class="qrcode-container">
+                    <div class="qrcode-box">
+                        <p>二维码加载中...</p>
+                    </div>
+                    <p>使用QQ手机版扫描二维码登录</p>
+                </div>
+            </div>
+
+            <!-- 密码登录部分 -->
+            <div id="password-login">
+                <form class="login-form">
+                    <div class="form-group">
+                        <input type="text" placeholder="QQ号码/手机/邮箱">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" placeholder="密码">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" placeholder="验证码">
+                    </div>
+                    <button type="submit" class="login-button">登录</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="login-footer">
+            <a href="#">找回密码</a>
+            <a href="#">注册新账号</a>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            // 切换标签页样式
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab:${tab === 'qrcode' ? 'first-child' : 'last-child'}`).classList.add('active');
+            
+            // 切换内容显示
+            document.querySelectorAll('.login-content > div').forEach(d => d.classList.remove('active'));
+            document.getElementById(`${tab}-login`).classList.add('active');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Document</title>
+</head>
+<body>
+    <button onclick="getJsonp()">获取jsonp数据</button>
+    
+    <script>
+
+        function test() {
+            console.log('jhejhej')
+        }
+
+        function getJsonp() {
+            const script = document.createElement('script');
+            script.onload = () => { // 加载完执行的操作，remove掉自己，这样就不会破坏body的结构
+                script.remove()
+            }
+            script.src = 'http://127.0.0.1:8080/cors/jsonp?callback=test'
+            document.body.appendChild(script)
+        }
+    </script>
+</body>
+</html>

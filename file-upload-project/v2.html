@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件上传DEMO v2</title>
+    <style>
+        /* 保持原有的样式不变 */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        .drop-zone {
+            width: 300px;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #777;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .drop-zone.drag-over {
+            background-color: #e1e1e1;
+            color: #333;
+        }
+
+        .file-list {
+            margin-top: 20px;
+            text-align: left;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .file-item {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+
+        .file-size {
+            width: 80px;
+            text-align: right;
+            margin-right: 10px;
+        }
+
+        .progress-bar {
+            width: 100px;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-right: 10px;
+        }
+
+        .progress {
+            width: 0%;
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .progress-text {
+            width: 40px;
+            text-align: right;
+            margin-right: 10px;
+        }
+
+        .action-button {
+            padding: 5px 10px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .action-button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="drop-zone" class="drop-zone">
+            <p>将文件/文件夹拖拽到此处上传</p>
+        </div>
+        <div id="file-list" class="file-list"></div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileList = document.getElementById('file-list');
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const items = e.dataTransfer.items;
+            handleItems(items);
+        });
+
+        async function handleItems(items) {
+            fileList.innerHTML = '';
+            const promises = [];
+            for (let item of items) {
+                if (item.kind === 'file') {
+                    const entry = item.webkitGetAsEntry();
+                    if (entry) {
+                        promises.push(traverseFileTree(entry));
+                    }
+                }
+            }
+            await Promise.all(promises);
+        }
+
+        async function traverseFileTree(item, path = '') {
+            if (item.isFile) {
+                const file = await new Promise((resolve) => item.file(resolve));
+                uploadFile(file, path + file.name);
+            } else if (item.isDirectory) {
+                const dirReader = item.createReader();
+                const entries = await new Promise((resolve) => {
+                    dirReader.readEntries((entries) => resolve(entries));
+                });
+                for (let entry of entries) {
+                    await traverseFileTree(entry, path + item.name + '/');
+                }
+            }
+        }
+
+        async function uploadFile(file, filePath) {
+            const fileItem = createFileItem(filePath, file.size);
+            const uploadId = await getUploadId(filePath, file.size);
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            let uploadedChunks = await getUploadedChunks(uploadId);
+
+            for (let chunkIndex = uploadedChunks; chunkIndex < totalChunks; chunkIndex++) {
+                const start = chunkIndex * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+
+                try {
+                    await uploadChunk(chunk, chunkIndex, uploadId, filePath);
+                    uploadedChunks++;
+                    updateProgress(fileItem, (uploadedChunks / totalChunks) * 100);
+                } catch (error) {
+                    console.error('Chunk upload failed:', error);
+                    failUpload(fileItem);
+                    return;
+                }
+
+                if (fileItem.dataset.cancelled) {
+                    cancelUpload(fileItem);
+                    return;
+                }
+            }
+
+            await completeUpload(uploadId, filePath);
+            completeUploadUI(fileItem);
+        }
+
+        function createFileItem(fileName, fileSize) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.dataset.filePath = fileName;
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = fileName;
+            
+            const sizeSpan = document.createElement('span');
+            sizeSpan.className = 'file-size';
+            sizeSpan.textContent = formatFileSize(fileSize);
+            
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar';
+            const progress = document.createElement('div');
+            progress.className = 'progress';
+            progressBar.appendChild(progress);
+            
+            const progressText = document.createElement('span');
+            progressText.className = 'progress-text';
+            progressText.textContent = '0%';
+            
+            const actionButton = document.createElement('button');
+            actionButton.className = 'action-button';
+            actionButton.textContent = '取消';
+            actionButton.onclick = () => {
+                fileItem.dataset.cancelled = true;
+            };
+            
+            fileItem.appendChild(nameSpan);
+            fileItem.appendChild(sizeSpan);
+            fileItem.appendChild(progressBar);
+            fileItem.appendChild(progressText);
+            fileItem.appendChild(actionButton);
+            
+            fileList.appendChild(fileItem);
+            
+            return fileItem;
+        }
+
+        function updateProgress(fileItem, percentComplete) {
+            const progressElement = fileItem.querySelector('.progress');
+            const progressTextElement = fileItem.querySelector('.progress-text');
+            progressElement.style.width = `${percentComplete}%`;
+            progressTextElement.textContent = `${Math.round(percentComplete)}%`;
+
+            const hue = percentComplete * 1.2;
+            progressElement.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+        }
+
+        function completeUploadUI(fileItem) {
+            const buttonElement = fileItem.querySelector('.action-button');
+            buttonElement.textContent = '删除';
+            buttonElement.onclick = () => fileItem.remove();
+        }
+
+        function failUpload(fileItem) {
+            const buttonElement = fileItem.querySelector('.action-button');
+            buttonElement.textContent = '重试';
+            buttonElement.onclick = () => {
+                // 这里可以添加重试逻辑
+            };
+        }
+
+        function cancelUpload(fileItem) {
+            const buttonElement = fileItem.querySelector('.action-button');
+            buttonElement.textContent = '删除';
+            buttonElement.onclick = () => fileItem.remove();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 以下是断点续传相关的函数，需要后端API支持
+
+        async function getUploadId(filePath, fileSize) {
+            // 向后端请求一个新的上传ID
+            const response = await fetch('http://localhost:8080/upload/initUpload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filePath, fileSize }),
+            });
+            console.log(response)
+            const data = await response.json();
+            return data.uploadId;
+        }
+
+        async function getUploadedChunks(uploadId) {
+            // 获取已上传的块数
+            const response = await fetch(`http://localhost:8080/upload/uploadedChunks?uploadId=${uploadId}`);
+            const data = await response.json();
+            return data.uploadedChunks;
+        }
+
+        async function uploadChunk(chunk, chunkIndex, uploadId, filePath) {
+            const formData = new FormData();
+            formData.append('chunk', chunk);
+            formData.append('chunkIndex', chunkIndex);
+            formData.append('uploadId', uploadId);
+            formData.append('filePath', filePath);
+
+            const response = await fetch('http://localhost:8080/upload/uploadChunk', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error('Chunk upload failed');
+            }
+        }
+
+        async function completeUpload(uploadId, filePath) {
+            const response = await fetch('http://localhost:8080/upload/completeUpload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ uploadId, filePath }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to complete upload');
+            }
+        }
+    </script>
+</body>
+</html>

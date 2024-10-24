@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件上传DEMO</title>
+    <!-- <link rel="stylesheet" href="styles.css"> -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        .drop-zone {
+            width: 300px;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #777;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .drop-zone.drag-over {
+            background-color: #e1e1e1;
+            color: #333;
+        }
+
+        .file-list {
+            margin-top: 20px;
+            text-align: left;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .file-item {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+
+        .file-size {
+            width: 80px;
+            text-align: right;
+            margin-right: 10px;
+        }
+
+        .progress-bar {
+            width: 100px;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-right: 10px;
+        }
+
+        .progress {
+            width: 0%;
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .progress-text {
+            width: 40px;
+            text-align: right;
+            margin-right: 10px;
+        }
+
+        .action-button {
+            padding: 5px 10px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .action-button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="drop-zone" class="drop-zone">
+            <p>将文件/文件夹拖拽到此处上传</p>
+        </div>
+        <div id="file-list" class="file-list"></div>
+    </div>
+    <!-- <script src="script.js"></script> -->
+     <script>
+        // 获取拖拽区域和文件列表的DOM元素
+        const dropZone = document.getElementById('drop-zone');
+        const fileList = document.getElementById('file-list');
+
+        // 当文件被拖到拖拽区域上方时
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault(); // 阻止默认行为
+            dropZone.classList.add('drag-over'); // 添加样式类以改变外观
+        });
+
+        // 当文件离开拖拽区域时
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over'); // 移除样式类
+        });
+
+        // 当文件被放置到拖拽区域时
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault(); // 阻止默认行为
+            dropZone.classList.remove('drag-over'); // 移除样式类
+            const items = e.dataTransfer.items; // 获取拖拽的项目
+            handleItems(items); // 处理拖拽的项目
+        });
+
+        // 处理拖拽的项目
+        async function handleItems(items) {
+            fileList.innerHTML = ''; // 清空文件列表
+            console.log(items); // 打印项目信息（用于调试）
+            const promises = []; // 创建一个promise数组来存储所有的异步操作
+            for (let item of items) {
+                if (item.kind === 'file') { // 如果是文件类型
+                    const entry = item.webkitGetAsEntry(); // 获取文件系统入口点
+                    if (entry) {
+                        promises.push(traverseFileTree(entry)); // 遍历文件树并将promise添加到数组
+                    }
+                }
+            }
+            await Promise.all(promises); // 等待所有的文件和文件夹都被处理
+        }
+
+        // 递归遍历文件树
+        async function traverseFileTree(item, path = '') {
+            if (item.isFile) { // 如果是文件 FileSystemFileEntry
+                const file = await new Promise((resolve) => item.file(resolve)); // 获取 File 对象
+                displayFile(path + file.name, file.size); // 显示文件
+            } else if (item.isDirectory) { // 如果是目录 FileSystemDirectoryEntry
+                // displayFile(path + item.name + '/'); // 显示目录
+                const dirReader = item.createReader(); // 创建目录读取器
+                const entries = await new Promise((resolve) => {
+                    dirReader.readEntries((entries) => resolve(entries)); // 读取目录内容
+                });
+                for (let entry of entries) {
+                    await traverseFileTree(entry, path + item.name + '/'); // 递归处理目录内的每一项
+                }
+            }
+        }
+
+        // 修改 displayFile 函数
+        function displayFile(fileName, fileSize) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = fileName;
+            
+            const sizeSpan = document.createElement('span');
+            sizeSpan.className = 'file-size';
+            sizeSpan.textContent = formatFileSize(fileSize);
+            
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar';
+            const progress = document.createElement('div');
+            progress.className = 'progress';
+            progressBar.appendChild(progress);
+            
+            const progressText = document.createElement('span');
+            progressText.className = 'progress-text';
+            progressText.textContent = '0%';
+            
+            const actionButton = document.createElement('button');
+            actionButton.className = 'action-button';
+            actionButton.textContent = '取消';
+            
+            fileItem.appendChild(nameSpan);
+            fileItem.appendChild(sizeSpan);
+            fileItem.appendChild(progressBar);
+            fileItem.appendChild(progressText);
+            fileItem.appendChild(actionButton);
+            
+            fileList.appendChild(fileItem);
+            
+            // 模拟上传进度
+            simulateUpload(progress, progressText, actionButton, fileItem);
+        }
+
+        // 修改 simulateUpload 函数
+        function simulateUpload(progressElement, progressTextElement, buttonElement, fileItemElement) {
+            let progress = 0;
+            const duration = Math.floor(Math.random() * 2000) + 1000; // 随机 1-3 秒
+            const startTime = Date.now();
+            let intervalId;
+
+            const updateProgress = () => {
+                const elapsedTime = Date.now() - startTime;
+                progress = Math.min((elapsedTime / duration) * 100, 100);
+                
+                progressElement.style.width = `${progress}%`;
+                progressTextElement.textContent = `${Math.round(progress)}%`;
+                
+                // 更新进度条颜色
+                const hue = progress * 1.2; // 0 到 120 (红色到绿色)
+                progressElement.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+                
+                if (progress >= 100) {
+                    clearInterval(intervalId);
+                    buttonElement.textContent = '删除';
+                    buttonElement.onclick = () => fileItemElement.remove();
+                }
+            };
+
+            intervalId = setInterval(updateProgress, 50); // 更新频率更高，使进度条更平滑
+
+            buttonElement.textContent = '取消';
+            buttonElement.onclick = () => {
+                clearInterval(intervalId);
+                buttonElement.textContent = '删除';
+                buttonElement.onclick = () => fileItemElement.remove();
+            };
+        }
+
+        // 添加格式化文件大小的辅助函数
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+     </script>
+</body>
+</html>
